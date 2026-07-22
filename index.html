@@ -244,8 +244,8 @@
       </div>
 
       <div class="cv-drop" id="cvDrop">
-        📎 Arrastrá el CV acá (.txt o .docx) o hacé clic para elegirlo — lo leo y sugiero los parámetros de arriba
-        <input type="file" id="cvInput" accept=".txt,.docx" style="display:none;">
+        📎 Arrastrá el CV acá (.pdf, .docx o .txt) o hacé clic para elegirlo — lo leo y sugiero los parámetros de arriba
+        <input type="file" id="cvInput" accept=".txt,.docx,.pdf" style="display:none;">
       </div>
       <div class="status-msg" id="cvStatus"></div>
 
@@ -304,7 +304,22 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+async function extractPdfText(file){
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
+  let fullText = '';
+  for(let i = 1; i <= pdf.numPages; i++){
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    fullText += content.items.map(it => it.str).join(' ') + '\n';
+  }
+  return fullText;
+}
+
 const DEFAULT_JOBS = [
   {id:'j1', title:'Administrativo/a de Certificaciones de Obra', company:'Importante empresa constructora', location:'Mercedes, Buenos Aires', source:'Bumeran/Computrabajo (vía Jooble)', posted:'hace 15 días', url:'https://ar.jooble.org/desc/7350092572750114929', keywords:['certificaciones de obra','mediciones','fondos de reparo','anticipos','contabilidad de obra']},
   {id:'j2', title:'Administrativo/a de Obra', company:'Ingetermo', location:'Boulogne, Buenos Aires', source:'ZonaJobs (vía Jooble)', posted:'hace 2 meses', url:'https://ar.jooble.org/desc/-6773978097990694907', keywords:['gestión de presupuestos','seguimiento de compras','asistencia a dirección de obra','contabilidad de obra']},
@@ -512,11 +527,14 @@ async function handleCvFile(file){
       const arrayBuffer = await file.arrayBuffer();
       const result = await window.mammoth.extractRawText({arrayBuffer});
       text = result.value;
+    } else if(file.name.toLowerCase().endsWith('.pdf')){
+      text = await extractPdfText(file);
     } else {
       text = await file.text();
     }
   }catch(err){
-    cvStatus.textContent = 'No pude leer ese archivo. Probá con .txt o .docx (los PDF todavía no se pueden leer directo acá).';
+    console.error(err);
+    cvStatus.textContent = 'No pude leer ese archivo. Probá con .pdf, .docx o .txt.';
     return;
   }
 
@@ -534,6 +552,7 @@ async function handleCvFile(file){
         }]
       })
     });
+    if(!response.ok){ throw new Error('HTTP ' + response.status); }
     const data = await response.json();
     const raw = data.content.map(b => b.text || '').join('');
     const clean = raw.replace(/```json|```/g, '').trim();
@@ -586,6 +605,7 @@ ${currentCvText.slice(0,6000)}`
         }]
       })
     });
+    if(!response.ok){ throw new Error('HTTP ' + response.status); }
     const data = await response.json();
     const improved = data.content.map(b => b.text || '').join('');
     lastImprovedCv = improved.trim();
